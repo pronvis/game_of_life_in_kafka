@@ -16,3 +16,11 @@ impl Display for KafkaClientError {
         write!(f, "({:#})", self.err)
     }
 }
+
+impl std::convert::From<kafkang::error::Error> for KafkaClientError {
+    fn from(err: kafkang::error::Error) -> KafkaClientError {
+        let msg = format!("kafkang error: '{:#}'", err);
+        let anyhow_err = anyhow::Error::msg(msg);
+        KafkaClientError { err: anyhow_err }
+    }
+}

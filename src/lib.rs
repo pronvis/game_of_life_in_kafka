@@ -1,10 +1,19 @@
 pub mod errors;
+pub mod game;
 
 use errors::KafkaClientError;
-use structopt::StructOpt;
+use structopt::{clap::arg_enum, StructOpt};
 
 pub type Result<T> = std::result::Result<T, KafkaClientError>;
 pub type StdResult<T, E> = std::result::Result<T, E>;
+
+arg_enum! {
+    #[derive(Debug, Clone)]
+    enum ClientRole {
+        Consumer,
+        Producer
+    }
+}
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(name = "KafkaClientConfig")]
@@ -21,9 +30,8 @@ pub struct KafkaClientOpt {
     #[structopt(long, env)]
     pub kafka_consumer_group: String,
 
-    /// Consumer || Producer
-    #[structopt(long, env)]
-    pub kafka_client_role: String,
+    #[structopt(long, env, possible_values = &ClientRole::variants(), case_insensitive = true)]
+    pub kafka_client_role: ClientRole,
 }
 
 #[derive(Debug, Clone)]

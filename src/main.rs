@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use kafka_client::game::life_cell::LifeCellProcessor;
+use kafka_client::game::LifeCell;
 use kafka_client::KafkaClientOpt;
 use kafkang::{
     client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
@@ -10,31 +12,26 @@ use kafkang::{
 use log::{debug, info};
 use structopt::StructOpt;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let opt = KafkaClientOpt::from_args();
     let opt_clone = opt.clone();
-    std::env::set_var("RUST_LOG", opt.rust_log);
+    std::env::set_var("RUST_LOG", opt.rust_log.clone());
     env_logger::init();
 
     debug!("start kafka_client with config: {:#?}", opt_clone);
 
-    //     let broker_0 = "localhost:9092".to_owned();
-    //     let broker_1 = "localhost:9093".to_owned();
-    //     let broker_2 = "localhost:9094".to_owned();
-    //     let brokers = vec![broker_0, broker_1, broker_2];
-    //     let topic = "test".to_owned();
-    //     let group = "g4".to_owned();
-
-    //     if let Err(e) = consume_messages(group, topic, brokers) {
-    //         println!("Failed consuming messages: {}", e);
-    //     }
-
-    // for i in 0..100 {
-    //     let message = format!("hello, kafka {}", i);
-    //     if let Err(e) = produce_messages(topic.as_str(), brokers.clone(), message.as_bytes()) {
-    //         println!("Failed producing messages: {}", e);
-    //     }
-    // }
+    let x = tokio::task::spawn(async move {
+        for i in 0..10 {
+            let opt_clone = opt.clone();
+            let x = i % 3;
+            let y = i / 3;
+            let lfp = LifeCellProcessor::new(LifeCell::new(x, y), opt_clone);
+            println!("[{}:{}]: {:?}", x, y, lfp.unwrap().life_cells_to_read);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+    x.await.unwrap();
 }
 
 fn consume_messages(group: String, topic: String, brokers: Vec<String>) -> Result<(), KafkaError> {
