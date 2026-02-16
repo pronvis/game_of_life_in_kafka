@@ -1,18 +1,22 @@
-use std::{time::Duration, vec};
+use std::time::Duration;
 
 use kafkang::{
-    client::{FetchOffset, GroupOffsetStorage},
+    client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
     consumer::Consumer,
-    producer::{DefaultPartitioner, Producer},
+    producer::{DefaultPartitioner, Producer, Record},
 };
+use tokio::task::JoinHandle;
 
 use crate::{game::LifeCell, KafkaClientOpt};
 use crate::{game::ToTopic, Result};
+use log::error;
 
 pub struct LifeCellProcessor {
     consumers: Vec<Consumer>,
-    // producer: Producer<DefaultPartitioner>,
+    producer: Producer<DefaultPartitioner>,
+    topic: String,
     pub life_cells_to_read: Vec<String>,
+    pub state: bool,
 }
 
 impl LifeCellProcessor {
@@ -45,9 +49,133 @@ impl LifeCellProcessor {
             })
             .collect::<Result<Vec<Consumer>>>()?;
 
+        let producer = Producer::from_hosts(opt.kafka_brokers.0)
+            .with_ack_timeout(Duration::from_millis(200))
+            .with_required_acks(RequiredAcks::One)
+            .create()?;
+
         return Ok(Self {
             life_cells_to_read: topics_to_read,
             consumers,
+            producer,
+            topic: life_cell.to_topic(),
+            state: false,
         });
     }
+
+    pub fn start(self) -> JoinHandle<()> {
+        tokio::task::spawn(async move { self.start_changing_state().await })
+    }
+
+    async fn start_changing_state(mut self) {
+        loop {
+            let messages: Vec<MessageWithMeta> = self
+                .consumers
+                .iter_mut()
+                .flat_map(Self::next_message)
+                .flatten()
+                .collect();
+
+            if messages.len() != self.consumers.len() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                continue;
+            } else {
+                let first_offset = messages[0].offset;
+                if !messages.iter().all(|m| m.offset == first_offset) {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    continue;
+                }
+
+                let neigbors_alive = messages.iter().filter(|m| m.value).count();
+                let commit_result_count: usize = self
+                    .consumers
+                    .iter_mut()
+                    .zip(messages)
+                    .flat_map(|(consumer, msg)| Self::consume_message(consumer, &msg))
+                    .count();
+                if commit_result_count != self.consumers.len() {
+                    error!("kafka: commit only part of consumers. moved to inconsistent state. stopping");
+                    return;
+                }
+
+                let new_state = self.calc_new_state(neigbors_alive);
+                self.state = new_state;
+
+                let flag: u8 = if self.state { 1 } else { 0 };
+                let mut table = [0u8; 1];
+                table[0] = flag;
+
+                let produce_res = self
+                    .producer
+                    .send(&Record::from_value(self.topic.as_str(), table.as_slice()));
+
+                if let Err(err) = produce_res {
+                    error!(
+                        "kafka: fail to send record about cell #{} new state. error: {:#}. stopping",
+                        self.topic, err
+                    );
+                    return;
+                }
+
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+    }
+
+    fn next_message(consumer: &mut Consumer) -> Result<Option<MessageWithMeta>> {
+        let mss = consumer.poll()?;
+        let Some(next_messages) = mss.into_iter().next() else {
+            return Ok(None);
+        };
+        let Some(next_message) = next_messages.messages().iter().next() else {
+            return Ok(None);
+        };
+
+        let topic = next_messages.topic().to_owned();
+        let partition = next_messages.partition();
+
+        //1 - cell alive; 0 - cell dead
+        let cell_vlaue = next_message.value[0] == 1;
+
+        return Ok(Some(MessageWithMeta::new(
+            cell_vlaue,
+            topic,
+            partition,
+            next_message.offset,
+        )));
+    }
+
+    fn consume_message(consumer: &mut Consumer, msg: &MessageWithMeta) -> Result<()> {
+        consumer.consume_message(msg.topic.as_str(), msg.partition, msg.offset)?;
+        consumer.commit_consumed().map_err(|e| e.into())
+    }
+
+    fn calc_new_state(&self, neighbors_alize: usize) -> bool {
+        if !self.state && neighbors_alize == 3 {
+            return true;
+        } else if self.state && (neighbors_alize == 3 || neighbors_alize == 2) {
+            return true;
+        }
+        return false;
+    }
 }
+
+struct MessageWithMeta {
+    pub value: bool,
+    pub topic: String,
+    pub partition: i32,
+    pub offset: i64,
+}
+
+impl MessageWithMeta {
+    pub fn new(value: bool, topic: String, partition: i32, offset: i64) -> Self {
+        Self {
+            value,
+            topic,
+            partition,
+            offset,
+        }
+    }
+}
+// if cell is dead & have 3 alive cells around -> it become alive
+// if cell alive & have 2 || 3 alive cells around -> it continue live, otherwise become dead
