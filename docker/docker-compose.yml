@@ -1,0 +1,25 @@
+services:
+  kafka_client_0:
+    image: kafka_client
+    networks:
+      - kafka-network
+    environment:
+      KAFKA_BROKERS: localhost:9092,localhost:9093,localhost:9094
+      KAFKA_TOPIC: test
+      KAFKA_CONSUMER_GROUP: g4
+      KAFKA_CLIENT_ROLE: CONSUMER
+    container_name: kafka_client_0
+  kafka_client_1:
+    image: kafka_client
+    networks:
+      - kafka-network
+    environment:
+      KAFKA_BROKERS: localhost:9092,localhost:9093,localhost:9094
+      KAFKA_TOPIC: test
+      KAFKA_CONSUMER_GROUP: g4
+      KAFKA_CLIENT_ROLE: PRODUCER
+    container_name: kafka_client_1
+networks:
+  kafka-network:
+    driver: bridge
+
