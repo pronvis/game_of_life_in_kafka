@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "pre_initial"
-path = "src/pre_initial.rs"
+name = "send_start"
+path = "src/send_start.rs"
 
 [[bin]]
 name = "life_cell"
@@ -18,3 +18,4 @@ structopt = "0.3.26"
 log = "0.4.29"
 env_logger = "0.11.9"
 anyhow = "1.0.101"
+futures = "0.3.32"

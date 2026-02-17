@@ -10,9 +10,8 @@ services:
     image: life_cell
     environment:
       KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
-      KAFKA_TOPIC: test
-      KAFKA_CONSUMER_GROUP: g4
-      KAFKA_CLIENT_ROLE: CONSUMER
+      GAME_SIZE: 10x10
+      CELLS: 0-20
       RUST_LOG: debug
     container_name: life_cell_0
     profiles: ["dev"]
@@ -22,14 +21,47 @@ services:
     image: life_cell
     environment:
       KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
-      KAFKA_TOPIC: test
-      KAFKA_CONSUMER_GROUP: g4
-      KAFKA_CLIENT_ROLE: PRODUCER
+      GAME_SIZE: 10x10
+      CELLS: 20-40
       RUST_LOG: debug
     container_name: life_cell_1
     profiles: ["dev"]
     networks:
       - kafka-network
+  life_cell_2:
+    image: life_cell
+    environment:
+      KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
+      GAME_SIZE: 10x10
+      CELLS: 40-60
+      RUST_LOG: debug
+    container_name: life_cell_2
+    profiles: ["dev"]
+    networks:
+      - kafka-network
+  life_cell_3:
+    image: life_cell
+    environment:
+      KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
+      GAME_SIZE: 10x10
+      CELLS: 60-80
+      RUST_LOG: debug
+    container_name: life_cell_3
+    profiles: ["dev"]
+    networks:
+      - kafka-network
+  life_cell_4:
+    image: life_cell
+    environment:
+      KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
+      GAME_SIZE: 10x10
+      CELLS: 80-100
+      RUST_LOG: debug
+    container_name: life_cell_4
+    profiles: ["dev"]
+    networks:
+      - kafka-network
+
 networks:
   kafka-network:
     driver: bridge

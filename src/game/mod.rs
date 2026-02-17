@@ -17,11 +17,11 @@ pub trait ToTopic {
 
 impl ToTopic for LifeCell {
     fn to_topic(&self) -> String {
-        (self.x as i32, self.y as i32).to_topic()
+        (self.x, self.y).to_topic()
     }
 }
 
-impl ToTopic for (i32, i32) {
+impl ToTopic for (u16, u16) {
     fn to_topic(&self) -> String {
         format!("{}-{}", self.0, self.1)
     }

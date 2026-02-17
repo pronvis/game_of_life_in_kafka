@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, u16};
 
 use kafkang::{
     client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
@@ -29,6 +29,8 @@ impl LifeCellProcessor {
                 (life_cell.x as i32 + x, life_cell.y as i32 + y)
             })
             .filter(|&(x, y)| x >= 0 && y >= 0)
+            .map(|(x, y)| (x as u16, y as u16))
+            .filter(|&(x, y)| x < opt.game_size.x && y < opt.game_size.y)
             .map(|(x, y)| (x, y).to_topic())
             .collect::<Vec<String>>();
 

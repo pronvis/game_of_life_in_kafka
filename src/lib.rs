@@ -1,19 +1,12 @@
 pub mod errors;
 pub mod game;
 
-use errors::KafkaClientError;
-use structopt::{clap::arg_enum, StructOpt};
+use anyhow::anyhow;
+use errors::GameOfLifeInKafkaError;
+use structopt::StructOpt;
 
-pub type Result<T> = std::result::Result<T, KafkaClientError>;
+pub type Result<T> = std::result::Result<T, GameOfLifeInKafkaError>;
 pub type StdResult<T, E> = std::result::Result<T, E>;
-
-arg_enum! {
-    #[derive(Debug, Clone)]
-    enum ClientRole {
-        Consumer,
-        Producer
-    }
-}
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(name = "GameOfLifeInKafkaConfig")]
@@ -24,14 +17,51 @@ pub struct GameOfLifeInKafkaOpt {
     #[structopt(long, env)]
     pub kafka_brokers: Addrs,
 
-    #[structopt(long, env)]
-    pub kafka_topic: String,
+    #[structopt(long, env, parse(try_from_str = parse_cells_range))]
+    pub cells: CellsRange,
 
-    #[structopt(long, env)]
-    pub kafka_consumer_group: String,
+    #[structopt(long, env, parse(try_from_str = parse_game_size))]
+    pub game_size: GameSize,
+}
 
-    #[structopt(long, env, possible_values = &ClientRole::variants(), case_insensitive = true)]
-    pub kafka_client_role: ClientRole,
+#[derive(Debug, Clone)]
+pub struct GameSize {
+    pub x: u16,
+    pub y: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct CellsRange {
+    pub from: u16,
+    pub to: u16,
+}
+
+fn parse_game_size(src: &str) -> Result<GameSize> {
+    let mut splitted = src.split('x');
+    let x = splitted
+        .next()
+        .ok_or(anyhow!("fail to parse game size: {}", src))?
+        .parse()?;
+    let y = splitted
+        .next()
+        .ok_or(anyhow!("fail to parse game size: {}", src))?
+        .parse()?;
+
+    Ok(GameSize { x, y })
+}
+
+fn parse_cells_range(src: &str) -> Result<CellsRange> {
+    let mut splitted = src.split('-');
+    let from = splitted
+        .next()
+        .ok_or(anyhow!("fail to parse cells range: {}", src))?
+        .parse()?;
+    let to = splitted
+        .next()
+        .ok_or(anyhow!("fail to parse cells range: {}", src))?
+        .parse()?;
+
+    Ok(CellsRange { from, to })
 }
 
 #[derive(Debug, Clone)]
