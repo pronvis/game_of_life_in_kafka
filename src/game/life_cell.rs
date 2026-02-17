@@ -85,7 +85,8 @@ impl LifeCellProcessor {
 
             if messages.len() != self.consumers.len() {
                 warn!(
-                    "consumed lesser then needed messages: {}/{}",
+                    "{} consumed lesser then needed messages: {}/{}",
+                    self.topic,
                     messages.len(),
                     self.consumers.len()
                 );
@@ -96,7 +97,10 @@ impl LifeCellProcessor {
                 let offsets: Vec<i64> = messages.iter().map(|m| m.offset).collect();
                 if !offsets.iter().all(|&offset| offset == first_offset) {
                     tokio::time::sleep(Duration::from_millis(10)).await;
-                    warn!("consumed messages have different offsets: {:?}", offsets);
+                    warn!(
+                        "{} consumed messages have different offsets: {:?}",
+                        self.topic, offsets
+                    );
                     continue;
                 }
 
@@ -108,7 +112,7 @@ impl LifeCellProcessor {
                     .flat_map(|(consumer, msg)| Self::consume_message(consumer, &msg))
                     .count();
                 if commit_result_count != self.consumers.len() {
-                    error!("kafka: commit only part of consumers. moved to inconsistent state. stopping");
+                    error!("{} kafka: commit only part of consumers. moved to inconsistent state. stopping", self.topic);
                     return;
                 }
 

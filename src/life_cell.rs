@@ -56,27 +56,6 @@ fn create_cell_processors(opt: GameOfLifeInKafkaOpt) -> Vec<Result<JoinHandle<()
             }
         })
         .collect()
-    // (opt.cells.from..opt.cells.to)
-    //     .map(|i| {
-    //         let opt_clone = opt.clone();
-    //         let x = i % opt.game_size.x;
-    //         let y = i % opt.game_size.y;
-    //         let lfp = LifeCellProcessor::new(LifeCell::new(x, y), opt_clone);
-    //         match lfp {
-    //             Err(err) => Err(anyhow!(
-    //                 "fail to crate LifeCellProcessor[{}, {}], reason: {:#}",
-    //                 x,
-    //                 y,
-    //                 err
-    //             )
-    //             .into()),
-    //             Ok(lfp) => {
-    //                 debug!("[{}:{}]: {:?}", x, y, lfp.life_cells_to_read);
-    //                 Ok(lfp.start())
-    //             }
-    //         }
-    //     })
-    //     .collect()
 }
 
 fn get_list_of_coordinates(cells_range: &CellsRange, game_size: &GameSize) -> Vec<(u16, u16)> {
