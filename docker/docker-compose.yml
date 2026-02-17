@@ -1,24 +1,35 @@
 services:
-  kafka_client_0:
-    image: kafka_client
+  kafka_topic_creator:
+    image: confluentinc/cp-kafka
+    command: /bin/sh -c 'for x in {0..9}; do for y in {0..9}; do kafka-topics --create --bootstrap-server kafka0:29092 --replication-factor 2 --partitions 1 --topic $$x-$$y; done; done'
+    container_name: kafka_topic_creator
+    profiles: ["setup"]
     networks:
       - kafka-network
+  life_cell_0:
+    image: life_cell
     environment:
-      KAFKA_BROKERS: localhost:9092,localhost:9093,localhost:9094
+      KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
       KAFKA_TOPIC: test
       KAFKA_CONSUMER_GROUP: g4
       KAFKA_CLIENT_ROLE: CONSUMER
-    container_name: kafka_client_0
-  kafka_client_1:
-    image: kafka_client
+      RUST_LOG: debug
+    container_name: life_cell_0
+    profiles: ["dev"]
     networks:
       - kafka-network
+  life_cell_1:
+    image: life_cell
     environment:
-      KAFKA_BROKERS: localhost:9092,localhost:9093,localhost:9094
+      KAFKA_BROKERS: kafka0:29092,kafka1:29092,kafka2:29092
       KAFKA_TOPIC: test
       KAFKA_CONSUMER_GROUP: g4
       KAFKA_CLIENT_ROLE: PRODUCER
-    container_name: kafka_client_1
+      RUST_LOG: debug
+    container_name: life_cell_1
+    profiles: ["dev"]
+    networks:
+      - kafka-network
 networks:
   kafka-network:
     driver: bridge
