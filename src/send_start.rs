@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
         return Err(anyhow!("some cell initial state has not been sent. stopping").into());
     }
 
+    info!("Initial state has been successfully sent.");
     Ok(())
 }
 
@@ -55,11 +56,13 @@ fn send_initial_state(
     topic_with_msg
         .into_iter()
         .map(|(topic, data)| {
-            producer
+            let send_res = producer
                 .send(&Record::from_value(topic.as_str(), data.as_slice()))
                 .map_err(|e| {
                     anyhow!("fail to send init message to topic {}, err: {:#}", topic, e).into()
-                })
+                });
+            info!("send res: {:?}, data: {:?}", send_res, data);
+            send_res
         })
         .collect()
 }

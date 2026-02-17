@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use crate::{game::LifeCell, GameOfLifeInKafkaOpt};
 use crate::{game::ToTopic, Result};
-use log::error;
+use log::{debug, error, warn};
 
 pub struct LifeCellProcessor {
     consumers: Vec<Consumer>,
@@ -78,13 +78,25 @@ impl LifeCellProcessor {
                 .flatten()
                 .collect();
 
+            if messages.is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                continue;
+            }
+
             if messages.len() != self.consumers.len() {
+                warn!(
+                    "consumed lesser then needed messages: {}/{}",
+                    messages.len(),
+                    self.consumers.len()
+                );
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 continue;
             } else {
                 let first_offset = messages[0].offset;
-                if !messages.iter().all(|m| m.offset == first_offset) {
+                let offsets: Vec<i64> = messages.iter().map(|m| m.offset).collect();
+                if !offsets.iter().all(|&offset| offset == first_offset) {
                     tokio::time::sleep(Duration::from_millis(10)).await;
+                    warn!("consumed messages have different offsets: {:?}", offsets);
                     continue;
                 }
 
@@ -118,6 +130,7 @@ impl LifeCellProcessor {
                     );
                     return;
                 }
+                debug!("Successfully sent new state to topic: {}", self.topic);
 
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
