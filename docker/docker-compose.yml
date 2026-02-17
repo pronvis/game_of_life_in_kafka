@@ -1,11 +1,67 @@
 services:
+  kafka0:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL_LISTENER:PLAINTEXT,EXTERNAL_LISTENER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL_LISTENER://kafka0:29092,EXTERNAL_LISTENER://0.0.0.0:9092,CONTROLLER://kafka0:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL_LISTENER://kafka0:29092,EXTERNAL_LISTENER://localhost:9092
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka0:29093,1@kafka1:29093,2@kafka2:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL_LISTENER
+      KAFKA_BROKER_ID: 0
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+    container_name: kafka0
+    profiles: ["kafka"]
+    networks:
+      - kafka-network
+  kafka1:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL_LISTENER:PLAINTEXT,EXTERNAL_LISTENER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL_LISTENER://kafka1:29092,EXTERNAL_LISTENER://0.0.0.0:9093,CONTROLLER://kafka1:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL_LISTENER://kafka1:29092,EXTERNAL_LISTENER://localhost:9093
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka0:29093,1@kafka1:29093,2@kafka2:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL_LISTENER
+      KAFKA_BROKER_ID: 1
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+    container_name: kafka1
+    profiles: ["kafka"]
+    networks:
+      - kafka-network
+  kafka2:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL_LISTENER:PLAINTEXT,EXTERNAL_LISTENER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL_LISTENER://kafka2:29092,EXTERNAL_LISTENER://0.0.0.0:9094,CONTROLLER://kafka2:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL_LISTENER://kafka2:29092,EXTERNAL_LISTENER://localhost:9094
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka0:29093,1@kafka1:29093,2@kafka2:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL_LISTENER
+      KAFKA_BROKER_ID: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+    container_name: kafka2
+    profiles: ["kafka"]
+    networks:
+      - kafka-network
+
   kafka_topic_creator:
     image: confluentinc/cp-kafka
-    command: /bin/sh -c 'for x in {0..$GAME_SIZE_X}; do for y in {0..$GAME_SIZE_Y}; do kafka-topics --create --bootstrap-server kafka0:29092 --replication-factor 2 --partitions 1 --topic $$x-$$y; done; done'
+    command: /bin/sh -c 'for ((x = 0; x < $GAME_SIZE_X; x++)); do for ((y = 0; y < $GAME_SIZE_Y; y++)); do kafka-topics --create --bootstrap-server kafka0:29092 --replication-factor 2 --partitions 1 --topic $$x-$$y; done; done'
     container_name: kafka_topics_creator
     profiles: ["topics"]
     networks:
       - kafka-network
+
   life_cell_0:
     image: life_cell
     environment:
@@ -14,7 +70,7 @@ services:
       RUST_LOG: $RUST_LOG
       CELLS: 0-20
     container_name: life_cell_0
-    profiles: ["run"]
+    profiles: ["life_game"]
     networks:
       - kafka-network
   life_cell_1:
@@ -25,7 +81,7 @@ services:
       RUST_LOG: $RUST_LOG
       CELLS: 20-40
     container_name: life_cell_1
-    profiles: ["run"]
+    profiles: ["life_game"]
     networks:
       - kafka-network
   life_cell_2:
@@ -36,7 +92,7 @@ services:
       RUST_LOG: $RUST_LOG
       CELLS: 40-60
     container_name: life_cell_2
-    profiles: ["run"]
+    profiles: ["life_game"]
     networks:
       - kafka-network
   life_cell_3:
@@ -47,7 +103,7 @@ services:
       RUST_LOG: $RUST_LOG
       CELLS: 60-80
     container_name: life_cell_3
-    profiles: ["run"]
+    profiles: ["life_game"]
     networks:
       - kafka-network
   life_cell_4:
@@ -58,7 +114,7 @@ services:
       RUST_LOG: $RUST_LOG
       CELLS: 80-100
     container_name: life_cell_4
-    profiles: ["run"]
+    profiles: ["life_game"]
     networks:
       - kafka-network
 
