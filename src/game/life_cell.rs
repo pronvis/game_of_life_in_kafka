@@ -100,7 +100,7 @@ impl LifeCellProcessor {
                     continue;
                 }
 
-                let neigbors_alive = messages.iter().filter(|m| m.value).count();
+                let neighbors_alive = messages.iter().filter(|m| m.value).count();
                 let commit_result_count: usize = self
                     .consumers
                     .iter_mut()
@@ -112,7 +112,7 @@ impl LifeCellProcessor {
                     return;
                 }
 
-                let new_state = self.calc_new_state(neigbors_alive);
+                let new_state = self.calc_new_state(neighbors_alive);
                 self.state = new_state;
 
                 let flag: u8 = if self.state { 1 } else { 0 };
