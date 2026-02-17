@@ -2,9 +2,16 @@
 
 ### Build image
 
-`docker build -t kafka_client:latest .`
+`docker build -t life_cell:latest .`
 
 ## Run
 
-- `cd docker`
-- `docker compose up`
+### Create kafka topics
+
+(from `docker` dir)
+- `docker compose --profile setup up`
+
+### Start life cells
+
+(from `docker` dir)
+- `docker compose --profile dev up`

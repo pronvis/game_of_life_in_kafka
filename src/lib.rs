@@ -16,9 +16,9 @@ arg_enum! {
 }
 
 #[derive(Debug, Clone, StructOpt)]
-#[structopt(name = "KafkaClientConfig")]
-pub struct KafkaClientOpt {
-    #[structopt(long, env, default_value = "kafka_client=debug")]
+#[structopt(name = "GameOfLifeInKafkaConfig")]
+pub struct GameOfLifeInKafkaOpt {
+    #[structopt(long, env, default_value = "life_cell=debug")]
     pub rust_log: String,
 
     #[structopt(long, env)]

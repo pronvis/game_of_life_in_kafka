@@ -1,7 +1,15 @@
 [package]
-name = "kafka_client"
+name = "game_of_life_in_kafka"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "pre_initial"
+path = "src/pre_initial.rs"
+
+[[bin]]
+name = "life_cell"
+path = "src/life_cell.rs"
 
 [dependencies]
 kafkang = "0.2.1"

@@ -7,7 +7,7 @@ use kafkang::{
 };
 use tokio::task::JoinHandle;
 
-use crate::{game::LifeCell, KafkaClientOpt};
+use crate::{game::LifeCell, GameOfLifeInKafkaOpt};
 use crate::{game::ToTopic, Result};
 use log::error;
 
@@ -20,7 +20,7 @@ pub struct LifeCellProcessor {
 }
 
 impl LifeCellProcessor {
-    pub fn new(life_cell: LifeCell, opt: KafkaClientOpt) -> Result<Self> {
+    pub fn new(life_cell: LifeCell, opt: GameOfLifeInKafkaOpt) -> Result<Self> {
         let topics_to_read = (0..9)
             .filter(|&z| z != 4)
             .map(|z| {

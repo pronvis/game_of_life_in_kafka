@@ -12,17 +12,16 @@ RUN --mount=type=bind,source=src,target=src \
     --mount=type=cache,target=/code/target/ \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
-    cargo build --release && \
-    cp ./target/release/kafka_client /bin/kafka_client
+    cargo build --release --bin life_cell && \
+    cp ./target/release/life_cell /bin/life_cell
 
 # Run
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
-RUN addgroup app
-RUN useradd -g app app
+RUN useradd app
 
-COPY --from=cargo-build /bin/kafka_client /bin/
+COPY --from=cargo-build /bin/life_cell /bin/
 
 USER app
 
-CMD ["/bin/kafka_client"]
+CMD ["/bin/life_cell"]
