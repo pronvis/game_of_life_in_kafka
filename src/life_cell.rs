@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     std::env::set_var("RUST_LOG", opt.rust_log.clone());
     env_logger::init();
 
-    debug!("start life_cell with config: {:#?}", opt_clone);
+    info!("start life_cell with config: {:#?}", opt_clone);
 
     let handlers = create_cell_processors(opt);
 
