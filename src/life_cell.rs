@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use anyhow::anyhow;
-use game_of_life_in_kafka::game::life_cell::LifeCellProcessor;
+use game_of_life_in_kafka::game::life_cell_processor::LifeCellProcessor;
 use game_of_life_in_kafka::game::LifeCell;
 use game_of_life_in_kafka::CellsRange;
 use game_of_life_in_kafka::GameOfLifeInKafkaOpt;
@@ -13,7 +15,7 @@ use tokio::task::JoinHandle;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = GameOfLifeInKafkaOpt::from_args();
+    let opt = Arc::new(GameOfLifeInKafkaOpt::from_args());
     let opt_clone = opt.clone();
     std::env::set_var("RUST_LOG", opt.rust_log.clone());
     env_logger::init();
@@ -35,7 +37,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn create_cell_processors(opt: GameOfLifeInKafkaOpt) -> Vec<Result<JoinHandle<()>>> {
+fn create_cell_processors(opt: Arc<GameOfLifeInKafkaOpt>) -> Vec<Result<JoinHandle<()>>> {
     get_list_of_coordinates(&opt.cells, &opt.game_size)
         .into_iter()
         .map(|(x, y)| {

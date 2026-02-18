@@ -1,4 +1,4 @@
-pub mod life_cell;
+pub mod life_cell_processor;
 
 pub struct LifeCell {
     pub x: u16,

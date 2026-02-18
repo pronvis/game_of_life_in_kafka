@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{time::Duration, u16};
 
 use kafkang::{
@@ -20,7 +21,7 @@ pub struct LifeCellProcessor {
 }
 
 impl LifeCellProcessor {
-    pub fn new(life_cell: LifeCell, opt: GameOfLifeInKafkaOpt) -> Result<Self> {
+    pub fn new(life_cell: LifeCell, opt: Arc<GameOfLifeInKafkaOpt>) -> Result<Self> {
         let topics_to_read = (0..9)
             .filter(|&z| z != 4)
             .map(|z| {
@@ -51,7 +52,7 @@ impl LifeCellProcessor {
             })
             .collect::<Result<Vec<Consumer>>>()?;
 
-        let producer = Producer::from_hosts(opt.kafka_brokers.0)
+        let producer = Producer::from_hosts(opt.kafka_brokers.0.clone())
             .with_ack_timeout(Duration::from_millis(200))
             .with_required_acks(RequiredAcks::One)
             .create()?;
@@ -80,6 +81,7 @@ impl LifeCellProcessor {
 
             if messages.is_empty() {
                 tokio::time::sleep(Duration::from_millis(10)).await;
+                debug!("empty messages");
                 continue;
             }
 
@@ -146,6 +148,7 @@ impl LifeCellProcessor {
         let Some(next_messages) = mss.into_iter().next() else {
             return Ok(None);
         };
+        debug!("next_messages len: {}", next_messages.messages().len());
         let Some(next_message) = next_messages.messages().iter().next() else {
             return Ok(None);
         };
