@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration, vec};
 
 use anyhow::anyhow;
-use game_of_life_in_kafka::{game::ToTopic, GameOfLifeInKafkaOpt, Result};
+use game_of_life_in_kafka::{game::ToTopic, Result, SendStartOpt};
 use kafkang::{
     client::RequiredAcks,
     producer::{Producer, Record},
@@ -11,7 +11,7 @@ use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = GameOfLifeInKafkaOpt::from_args();
+    let opt = SendStartOpt::from_args();
     let opt_clone = opt.clone();
     std::env::set_var("RUST_LOG", opt.rust_log.clone());
     env_logger::init();

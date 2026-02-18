@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 
 use crate::{game::LifeCell, GameOfLifeInKafkaOpt};
 use crate::{game::ToTopic, Result};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 
 pub struct LifeCellProcessor {
     consumers: HashMap<String, Consumer>,
@@ -161,6 +161,13 @@ impl LifeCellProcessor {
                     error!("{} kafka: commit only part of consumers. moved to inconsistent state. stopping", self.topic);
                     return;
                 }
+                self.msg_buff.iter_mut().for_each(|(_, msgs)| {
+                    if let Some((index, _)) =
+                        msgs.iter().enumerate().min_by_key(|(_, msg)| msg.offset)
+                    {
+                        msgs.remove(index);
+                    }
+                });
 
                 let new_state = self.calc_new_state(neighbors_alive);
                 self.state = new_state;

@@ -9,6 +9,19 @@ pub type Result<T> = std::result::Result<T, GameOfLifeInKafkaError>;
 pub type StdResult<T, E> = std::result::Result<T, E>;
 
 #[derive(Debug, Clone, StructOpt)]
+#[structopt(name = "SendStartConfig")]
+pub struct SendStartOpt {
+    #[structopt(long, env, default_value = "send_start=debug")]
+    pub rust_log: String,
+
+    #[structopt(long, env)]
+    pub kafka_brokers: Addrs,
+
+    #[structopt(long, env, parse(try_from_str = parse_game_size))]
+    pub game_size: GameSize,
+}
+
+#[derive(Debug, Clone, StructOpt)]
 #[structopt(name = "GameOfLifeInKafkaConfig")]
 pub struct GameOfLifeInKafkaOpt {
     #[structopt(long, env, default_value = "life_cell=debug")]
