@@ -24,3 +24,7 @@
 
 (from `docker` dir)
 - `docker compose --profile life_game up -d`
+
+### Start frontend
+
+`cargo run --bin frontend -- --kafka-brokers localhost:9092,localhost:9093,localhost:9094 --rust-log debug --game-size 10x10`
