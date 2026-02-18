@@ -8,6 +8,10 @@ name = "send_start"
 path = "src/send_start.rs"
 
 [[bin]]
+name = "frontend"
+path = "src/frontend.rs"
+
+[[bin]]
 name = "life_cell"
 path = "src/life_cell.rs"
 
