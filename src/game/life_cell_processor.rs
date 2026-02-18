@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{time::Duration, u16};
 
+use kafkang::consumer;
 use kafkang::{
     client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
     consumer::Consumer,
@@ -13,14 +15,18 @@ use crate::{game::ToTopic, Result};
 use log::{debug, error, warn};
 
 pub struct LifeCellProcessor {
-    consumers: Vec<Consumer>,
+    consumers: HashMap<String, Consumer>,
     producer: Producer<DefaultPartitioner>,
     topic: String,
-    pub life_cells_to_read: Vec<String>,
+    msg_buff: HashMap<String, Vec<MessageWithMeta>>,
     pub state: bool,
 }
 
 impl LifeCellProcessor {
+    pub fn topics(&self) -> Vec<&String> {
+        self.consumers.iter().map(|(topic, _)| topic).collect()
+    }
+
     pub fn new(life_cell: LifeCell, opt: Arc<GameOfLifeInKafkaOpt>) -> Result<Self> {
         let topics_to_read = (0..9)
             .filter(|&z| z != 4)
@@ -36,7 +42,7 @@ impl LifeCellProcessor {
             .collect::<Vec<String>>();
 
         let consumers = topics_to_read
-            .iter()
+            .into_iter()
             .map(|topic| {
                 Consumer::from_hosts(opt.kafka_brokers.0.clone())
                     .with_topic(topic.clone())
@@ -48,9 +54,10 @@ impl LifeCellProcessor {
                     .with_fetch_max_bytes_per_partition(100_000)
                     .with_retry_max_bytes_limit(1_000_000)
                     .create()
+                    .map(|c| (topic, c))
                     .map_err(|e| e.into())
             })
-            .collect::<Result<Vec<Consumer>>>()?;
+            .collect::<Result<HashMap<String, Consumer>>>()?;
 
         let producer = Producer::from_hosts(opt.kafka_brokers.0.clone())
             .with_ack_timeout(Duration::from_millis(200))
@@ -58,9 +65,9 @@ impl LifeCellProcessor {
             .create()?;
 
         return Ok(Self {
-            life_cells_to_read: topics_to_read,
             consumers,
             producer,
+            msg_buff: HashMap::default(),
             topic: life_cell.to_topic(),
             state: false,
         });
@@ -72,46 +79,83 @@ impl LifeCellProcessor {
 
     async fn start_changing_state(mut self) {
         loop {
-            let messages: Vec<MessageWithMeta> = self
+            let messages_map: HashMap<String, Vec<MessageWithMeta>> = self
                 .consumers
                 .iter_mut()
-                .flat_map(Self::next_message)
+                .flat_map(|(_, consumer)| Self::next_message(consumer))
                 .flatten()
                 .collect();
 
-            if messages.is_empty() {
+            for (key, msgs) in messages_map.into_iter() {
+                if let Some(buffered_msgs) = self.msg_buff.get_mut(&key) {
+                    buffered_msgs.extend(msgs);
+                } else {
+                    self.msg_buff.insert(key, msgs);
+                }
+            }
+
+            let messages_to_process: HashMap<&String, &MessageWithMeta> = self
+                .msg_buff
+                .iter()
+                .map(|(topic, msgs)| (topic, msgs.iter().min_by_key(|m| m.offset)))
+                .filter(|(_, msg)| msg.is_some())
+                .map(|(topic, msg)| (topic, msg.unwrap()))
+                .collect();
+
+            if messages_to_process.is_empty() {
+                let msgs_in_buff = self
+                    .msg_buff
+                    .iter()
+                    .map(|(topic, msgs)| format!("{}: {} messages", topic, msgs.len()))
+                    .collect::<Vec<_>>();
+                debug!("empty messages. buff_state: {:?}", msgs_in_buff);
                 tokio::time::sleep(Duration::from_millis(10)).await;
-                debug!("empty messages");
                 continue;
             }
 
-            if messages.len() != self.consumers.len() {
+            if messages_to_process.len() != self.consumers.len() {
                 warn!(
                     "{} consumed lesser then needed messages: {}/{}",
                     self.topic,
-                    messages.len(),
+                    messages_to_process.len(),
                     self.consumers.len()
                 );
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 continue;
             } else {
-                let first_offset = messages[0].offset;
-                let offsets: Vec<i64> = messages.iter().map(|m| m.offset).collect();
-                if !offsets.iter().all(|&offset| offset == first_offset) {
+                let first_offset = messages_to_process
+                    .iter()
+                    .map(|(_, msg)| msg.offset)
+                    .next()
+                    .unwrap_or(-1);
+                let all_same_offset: bool = messages_to_process
+                    .iter()
+                    .all(|(_, msg)| msg.offset == first_offset);
+
+                if !all_same_offset {
                     tokio::time::sleep(Duration::from_millis(10)).await;
                     warn!(
                         "{} consumed messages have different offsets: {:?}",
-                        self.topic, offsets
+                        self.topic,
+                        messages_to_process
+                            .iter()
+                            .map(|(_, msg)| msg.offset)
+                            .collect::<Vec<_>>()
                     );
                     continue;
                 }
 
-                let neighbors_alive = messages.iter().filter(|m| m.value).count();
+                let neighbors_alive = messages_to_process
+                    .iter()
+                    .filter(|(_, msg)| msg.value)
+                    .count();
                 let commit_result_count: usize = self
                     .consumers
                     .iter_mut()
-                    .zip(messages)
-                    .flat_map(|(consumer, msg)| Self::consume_message(consumer, &msg))
+                    .flat_map(|(topic, consumer)| {
+                        let msg = messages_to_process.get(topic).unwrap();
+                        Self::consume_message(consumer, topic, *msg)
+                    })
                     .count();
                 if commit_result_count != self.consumers.len() {
                     error!("{} kafka: commit only part of consumers. moved to inconsistent state. stopping", self.topic);
@@ -143,32 +187,31 @@ impl LifeCellProcessor {
         }
     }
 
-    fn next_message(consumer: &mut Consumer) -> Result<Option<MessageWithMeta>> {
+    fn next_message(consumer: &mut Consumer) -> Result<Option<(String, Vec<MessageWithMeta>)>> {
         let mss = consumer.poll()?;
         let Some(next_messages) = mss.into_iter().next() else {
             return Ok(None);
         };
         debug!("next_messages len: {}", next_messages.messages().len());
-        let Some(next_message) = next_messages.messages().iter().next() else {
-            return Ok(None);
-        };
-
         let topic = next_messages.topic().to_owned();
         let partition = next_messages.partition();
-
-        //1 - cell alive; 0 - cell dead
-        let cell_vlaue = next_message.value[0] == 1;
-
-        return Ok(Some(MessageWithMeta::new(
-            cell_vlaue,
-            topic,
-            partition,
-            next_message.offset,
-        )));
+        let parsed_messages: Vec<_> = next_messages
+            .messages()
+            .iter()
+            .map(|msg| {
+                //1 - cell alive; 0 - cell dead
+                MessageWithMeta::new(msg.value[0] == 1, partition, msg.offset)
+            })
+            .collect();
+        return Ok(Some((topic, parsed_messages)));
     }
 
-    fn consume_message(consumer: &mut Consumer, msg: &MessageWithMeta) -> Result<()> {
-        consumer.consume_message(msg.topic.as_str(), msg.partition, msg.offset)?;
+    fn consume_message(
+        consumer: &mut Consumer,
+        topic: &String,
+        msg: &MessageWithMeta,
+    ) -> Result<()> {
+        consumer.consume_message(topic, msg.partition, msg.offset)?;
         consumer.commit_consumed().map_err(|e| e.into())
     }
 
@@ -184,16 +227,14 @@ impl LifeCellProcessor {
 
 struct MessageWithMeta {
     pub value: bool,
-    pub topic: String,
     pub partition: i32,
     pub offset: i64,
 }
 
 impl MessageWithMeta {
-    pub fn new(value: bool, topic: String, partition: i32, offset: i64) -> Self {
+    pub fn new(value: bool, partition: i32, offset: i64) -> Self {
         Self {
             value,
-            topic,
             partition,
             offset,
         }

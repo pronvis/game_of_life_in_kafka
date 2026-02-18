@@ -52,7 +52,7 @@ fn create_cell_processors(opt: Arc<GameOfLifeInKafkaOpt>) -> Vec<Result<JoinHand
                 )
                 .into()),
                 Ok(lfp) => {
-                    debug!("[{}:{}]: {:?}", x, y, lfp.life_cells_to_read);
+                    debug!("[{}:{}]: {:?}", x, y, lfp.topics());
                     Ok(lfp.start())
                 }
             }
