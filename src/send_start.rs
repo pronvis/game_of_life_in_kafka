@@ -16,8 +16,8 @@ async fn main() -> Result<()> {
     std::env::set_var("RUST_LOG", opt.rust_log.clone());
     env_logger::init();
 
-    let topics: Vec<String> = (0..opt.game_size.x)
-        .flat_map(move |x| (0..opt.game_size.y).map(move |y| (x, y).to_topic()))
+    let topics: Vec<String> = (0..opt.game_size.y)
+        .flat_map(move |x| (0..opt.game_size.x).map(move |y| (x, y).to_topic()))
         .collect();
     info!("start send_start with config: {:#?}", opt_clone);
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, time::Duration, usize};
+use std::{collections::HashMap, mem::offset_of, str::FromStr, time::Duration, usize};
 
 use anyhow::anyhow;
 use game_of_life_in_kafka::{
@@ -114,15 +114,50 @@ impl GameOfLifeFrontend {
         tokio::task::spawn(async move { self.start_changing_state().await })
     }
 
+    fn need_to_read_from_kafka(&mut self) -> Option<HashMap<&Coord, &mut Consumer>> {
+        let map_with_min_offset: HashMap<_, _> = self
+            .msg_buff
+            .iter()
+            .flat_map(|(coord, msgs)| {
+                let min_offset = msgs.iter().min_by_key(|msg| msg.offset);
+                min_offset.map(|mo| (coord, mo.offset))
+            })
+            .collect();
+        let min_offset = map_with_min_offset.iter().next().map(|(_, offset)| *offset);
+
+        if let None = min_offset {
+            return Some(self.consumers.iter_mut().collect());
+        }
+        let min_offset = min_offset?;
+
+        let need_msgs = self.game_size.x * self.game_size.y;
+        let have_msgs: HashMap<_, _> = map_with_min_offset
+            .iter()
+            .filter(|(_, offset)| **offset == min_offset)
+            .collect();
+        if (have_msgs.len() as u16) < need_msgs {
+            let need_to_read: HashMap<_, _> = self
+                .consumers
+                .iter_mut()
+                .filter(|(coord, _)| !have_msgs.contains_key(coord))
+                .collect();
+
+            return Some(need_to_read);
+        }
+        return None;
+    }
+
     async fn start_changing_state(mut self) {
-        loop {
-            if self.msg_buff.is_empty() {
-                let messages_map: HashMap<Coord, Vec<MessageWithMeta>> = self
-                    .consumers
-                    .iter_mut()
-                    .flat_map(|(_, consumer)| Self::next_message(consumer))
-                    .flatten()
-                    .collect();
+        for _ in 0..3 {
+            let messages_map: Option<HashMap<Coord, Vec<MessageWithMeta>>> =
+                self.need_to_read_from_kafka().map(|mut consumers| {
+                    consumers
+                        .iter_mut()
+                        .flat_map(|(_, consumer)| Self::next_message(consumer))
+                        .flatten()
+                        .collect()
+                });
+            if let Some(messages_map) = messages_map {
                 for (key, msgs) in messages_map.into_iter() {
                     if let Some(buffered_msgs) = self.msg_buff.get_mut(&key) {
                         buffered_msgs.extend(msgs);
@@ -181,7 +216,7 @@ impl GameOfLifeFrontend {
                     continue;
                 }
 
-                Self::output_game_state(messages_to_process, &self.game_size);
+                Self::output_game_state(messages_to_process, &self.game_size, first_offset);
 
                 self.msg_buff.iter_mut().for_each(|(_, msgs)| {
                     if let Some((index, _)) =
@@ -196,7 +231,12 @@ impl GameOfLifeFrontend {
         }
     }
 
-    fn output_game_state(messages: HashMap<&Coord, &MessageWithMeta>, game_size: &GameSize) {
+    fn output_game_state(
+        messages: HashMap<&Coord, &MessageWithMeta>,
+        game_size: &GameSize,
+        offset: i64,
+    ) {
+        println!("-------- {} --------", offset);
         let mut str_builder =
             String::with_capacity((game_size.x * game_size.y + game_size.y * 2) as usize);
         let mut game_state = vec![vec![false; game_size.y as usize]; game_size.y as usize];

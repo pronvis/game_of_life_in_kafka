@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::{time::Duration, u16};
 
-use kafkang::consumer;
 use kafkang::{
     client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
     consumer::Consumer,
@@ -10,6 +9,7 @@ use kafkang::{
 };
 use tokio::task::JoinHandle;
 
+use crate::GameSize;
 use crate::{game::LifeCell, GameOfLifeInKafkaOpt};
 use crate::{game::ToTopic, Result};
 use log::{debug, error, info, warn};
@@ -20,6 +20,7 @@ pub struct LifeCellProcessor {
     topic: String,
     msg_buff: HashMap<String, Vec<MessageWithMeta>>,
     pub state: bool,
+    game_size: GameSize,
 }
 
 impl LifeCellProcessor {
@@ -29,7 +30,6 @@ impl LifeCellProcessor {
 
     pub fn new(life_cell: LifeCell, opt: Arc<GameOfLifeInKafkaOpt>) -> Result<Self> {
         let topics_to_read = (0..9)
-            .filter(|&z| z != 4)
             .map(|z| {
                 let x = 1 - z % 3;
                 let y = 1 - z / 3;
@@ -37,6 +37,7 @@ impl LifeCellProcessor {
             })
             .filter(|&(x, y)| x >= 0 && y >= 0)
             .map(|(x, y)| (x as u16, y as u16))
+            .filter(|&(x, y)| x != life_cell.x && y != life_cell.y)
             .filter(|&(x, y)| x < opt.game_size.x && y < opt.game_size.y)
             .map(|(x, y)| (x, y).to_topic())
             .collect::<Vec<String>>();
@@ -70,6 +71,7 @@ impl LifeCellProcessor {
             msg_buff: HashMap::default(),
             topic: life_cell.to_topic(),
             state: false,
+            game_size: opt.game_size.clone(),
         });
     }
 
@@ -77,20 +79,56 @@ impl LifeCellProcessor {
         tokio::task::spawn(async move { self.start_changing_state().await })
     }
 
-    async fn start_changing_state(mut self) {
-        loop {
-            let messages_map: HashMap<String, Vec<MessageWithMeta>> = self
+    fn need_to_read_from_kafka(&mut self) -> Option<HashMap<&String, &mut Consumer>> {
+        let map_with_min_offset: HashMap<_, _> = self
+            .msg_buff
+            .iter()
+            .flat_map(|(coord, msgs)| {
+                let min_offset = msgs.iter().min_by_key(|msg| msg.offset);
+                min_offset.map(|mo| (coord, mo.offset))
+            })
+            .collect();
+        let min_offset = map_with_min_offset.iter().next().map(|(_, offset)| *offset);
+
+        if let None = min_offset {
+            return Some(self.consumers.iter_mut().collect());
+        }
+        let min_offset = min_offset?;
+
+        let need_msgs = self.game_size.x * self.game_size.y;
+        let have_msgs: HashMap<_, _> = map_with_min_offset
+            .iter()
+            .filter(|(_, offset)| **offset == min_offset)
+            .collect();
+        if (have_msgs.len() as u16) < need_msgs {
+            let need_to_read: HashMap<_, _> = self
                 .consumers
                 .iter_mut()
-                .flat_map(|(_, consumer)| Self::next_message(consumer))
-                .flatten()
+                .filter(|(coord, _)| !have_msgs.contains_key(coord))
                 .collect();
 
-            for (key, msgs) in messages_map.into_iter() {
-                if let Some(buffered_msgs) = self.msg_buff.get_mut(&key) {
-                    buffered_msgs.extend(msgs);
-                } else {
-                    self.msg_buff.insert(key, msgs);
+            return Some(need_to_read);
+        }
+        return None;
+    }
+
+    async fn start_changing_state(mut self) {
+        loop {
+            let messages_map: Option<HashMap<String, Vec<MessageWithMeta>>> =
+                self.need_to_read_from_kafka().map(|mut consumers| {
+                    consumers
+                        .iter_mut()
+                        .flat_map(|(_, consumer)| Self::next_message(consumer))
+                        .flatten()
+                        .collect()
+                });
+            if let Some(messages_map) = messages_map {
+                for (key, msgs) in messages_map.into_iter() {
+                    if let Some(buffered_msgs) = self.msg_buff.get_mut(&key) {
+                        buffered_msgs.extend(msgs);
+                    } else {
+                        self.msg_buff.insert(key, msgs);
+                    }
                 }
             }
 
@@ -162,11 +200,7 @@ impl LifeCellProcessor {
                     return;
                 }
                 self.msg_buff.iter_mut().for_each(|(_, msgs)| {
-                    if let Some((index, _)) =
-                        msgs.iter().enumerate().min_by_key(|(_, msg)| msg.offset)
-                    {
-                        msgs.remove(index);
-                    }
+                    msgs.retain(|msg| msg.offset != first_offset);
                 });
 
                 let new_state = self.calc_new_state(neighbors_alive);
