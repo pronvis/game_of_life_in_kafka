@@ -17,7 +17,7 @@ pub trait ToTopic {
 
 impl ToTopic for LifeCell {
     fn to_topic(&self) -> String {
-        (self.x, self.y).to_topic()
+        (self.y, self.x).to_topic()
     }
 }
 

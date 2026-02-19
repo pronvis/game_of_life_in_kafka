@@ -17,20 +17,20 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let topics: Vec<String> = (0..opt.game_size.y)
-        .flat_map(move |x| (0..opt.game_size.x).map(move |y| (x, y).to_topic()))
+        .flat_map(move |x| (0..opt.game_size.x).map(move |y| (y, x).to_topic()))
         .collect();
     info!("start send_start with config: {:#?}", opt_clone);
 
     let mut topic_with_msg: HashMap<String, Vec<u8>> =
         topics.into_iter().map(|t| (t, vec![0])).collect();
 
-    topic_with_msg.insert("3-6".to_string(), vec![1]);
-    topic_with_msg.insert("4-6".to_string(), vec![1]);
-    topic_with_msg.insert("4-5".to_string(), vec![1]);
-    topic_with_msg.insert("4-4".to_string(), vec![1]);
-    topic_with_msg.insert("5-4".to_string(), vec![1]);
-    topic_with_msg.insert("5-3".to_string(), vec![1]);
     topic_with_msg.insert("6-3".to_string(), vec![1]);
+    topic_with_msg.insert("6-4".to_string(), vec![1]);
+    topic_with_msg.insert("5-4".to_string(), vec![1]);
+    topic_with_msg.insert("4-4".to_string(), vec![1]);
+    topic_with_msg.insert("4-5".to_string(), vec![1]);
+    topic_with_msg.insert("3-5".to_string(), vec![1]);
+    topic_with_msg.insert("3-6".to_string(), vec![1]);
 
     let mut producer =
         Producer::from_hosts(opt.kafka_brokers.iter().map(|a| a.to_owned()).collect())

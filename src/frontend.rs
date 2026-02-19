@@ -23,11 +23,11 @@ async fn main() -> Result<()> {
 
     info!("start frontend with config: {:#?}", opt_clone);
 
-    let topics: Vec<(String, Coord)> = (0..opt.game_size.x)
-        .flat_map(move |x| {
-            (0..opt.game_size.y).map(move |y| {
+    let topics: Vec<(String, Coord)> = (0..opt.game_size.y)
+        .flat_map(move |y| {
+            (0..opt.game_size.x).map(move |x| {
                 (
-                    (x, y).to_topic(),
+                    (y, x).to_topic(),
                     Coord {
                         x: x as usize,
                         y: y as usize,
@@ -89,8 +89,8 @@ where
             .split('-')
             .map(|s| s.parse().unwrap())
             .collect::<Vec<usize>>();
-        let x = splitted[0];
-        let y = splitted[1];
+        let y = splitted[0];
+        let x = splitted[1];
         Coord { x, y }
     }
 }
@@ -237,15 +237,14 @@ impl GameOfLifeFrontend {
         offset: i64,
     ) {
         println!("-------- {} --------", offset);
-        let mut str_builder =
-            String::with_capacity((game_size.x * game_size.y + game_size.y * 2) as usize);
-        let mut game_state = vec![vec![false; game_size.y as usize]; game_size.y as usize];
+        let mut str_builder = String::with_capacity((game_size.x * game_size.y * 2) as usize);
+        let mut game_state = vec![vec![false; game_size.x as usize]; game_size.y as usize];
         messages.iter().for_each(|(coord, msg)| {
-            game_state[coord.x][coord.y] = msg.value;
+            game_state[coord.y][coord.x] = msg.value;
         });
-        for x in game_state.iter() {
-            for y in x.iter() {
-                let ch = if *y { '*' } else { '.' };
+        for y in game_state.iter() {
+            for x in y.iter() {
+                let ch = if *x { '*' } else { '.' };
                 str_builder.push(ch);
             }
             str_builder.push_str("\r\n");

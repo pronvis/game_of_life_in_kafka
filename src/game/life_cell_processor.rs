@@ -33,13 +33,13 @@ impl LifeCellProcessor {
             .map(|z| {
                 let x = 1 - z % 3;
                 let y = 1 - z / 3;
-                (life_cell.x as i32 + x, life_cell.y as i32 + y)
+                (life_cell.y as i32 + y, life_cell.x as i32 + x)
             })
-            .filter(|&(x, y)| x >= 0 && y >= 0)
-            .map(|(x, y)| (x as u16, y as u16))
-            .filter(|&(x, y)| x != life_cell.x && y != life_cell.y)
-            .filter(|&(x, y)| x < opt.game_size.x && y < opt.game_size.y)
-            .map(|(x, y)| (x, y).to_topic())
+            .filter(|&(y, x)| x >= 0 && y >= 0)
+            .map(|(y, x)| (y as u16, x as u16))
+            .filter(|&(y, x)| x != life_cell.x || y != life_cell.y)
+            .filter(|&(y, x)| x < opt.game_size.x && y < opt.game_size.y)
+            .map(|(y, x)| (y, x).to_topic())
             .collect::<Vec<String>>();
 
         let consumers = topics_to_read
