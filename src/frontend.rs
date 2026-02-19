@@ -148,7 +148,7 @@ impl GameOfLifeFrontend {
     }
 
     async fn start_changing_state(mut self) {
-        for _ in 0..3 {
+        loop {
             let messages_map: Option<HashMap<Coord, Vec<MessageWithMeta>>> =
                 self.need_to_read_from_kafka().map(|mut consumers| {
                     consumers
