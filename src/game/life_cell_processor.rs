@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::{time::Duration, u16};
 
+use anyhow::anyhow;
 use kafkang::{
     client::{FetchOffset, GroupOffsetStorage, RequiredAcks},
     consumer::Consumer,
@@ -9,6 +10,7 @@ use kafkang::{
 };
 use tokio::task::JoinHandle;
 
+use crate::errors::GameOfLifeInKafkaError;
 use crate::GameSize;
 use crate::{game::LifeCell, GameOfLifeInKafkaOpt};
 use crate::{game::ToTopic, Result};
@@ -65,14 +67,44 @@ impl LifeCellProcessor {
             .with_required_acks(RequiredAcks::One)
             .create()?;
 
+        let initial_state = Self::read_initial_state(&life_cell, opt.clone())?;
+
         return Ok(Self {
             consumers,
             producer,
             msg_buff: HashMap::default(),
             topic: life_cell.to_topic(),
-            state: false,
+            state: initial_state,
             game_size: opt.game_size.clone(),
         });
+    }
+
+    fn read_initial_state(life_cell: &LifeCell, opt: Arc<GameOfLifeInKafkaOpt>) -> Result<bool> {
+        let mut consumer = Consumer::from_hosts(opt.kafka_brokers.0.clone())
+            .with_topic(life_cell.to_topic())
+            .with_group(life_cell.to_topic())
+            .with_fallback_offset(FetchOffset::Earliest)
+            .with_offset_storage(Some(GroupOffsetStorage::Kafka))
+            .with_fetch_max_wait_time(Duration::from_secs(1))
+            .with_fetch_min_bytes(1)
+            .with_fetch_max_bytes_per_partition(100_000)
+            .with_retry_max_bytes_limit(1_000_000)
+            .create()?;
+
+        let mss = consumer.poll()?;
+        let Some(next_messages) = mss.into_iter().next() else {
+            return Err(anyhow!("no messages in topic: {}", life_cell.to_topic()).into());
+        };
+        let initial_state: bool = next_messages
+            .messages()
+            .iter()
+            .next()
+            .map(|msg| msg.value[0] == 1)
+            .ok_or::<GameOfLifeInKafkaError>(
+                anyhow!("no messages in topic: {}", life_cell.to_topic()).into(),
+            )?;
+
+        Ok(initial_state)
     }
 
     pub fn start(self) -> JoinHandle<()> {

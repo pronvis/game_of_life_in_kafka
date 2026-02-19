@@ -62,18 +62,6 @@ services:
     networks:
       - kafka-network
 
-  life_cell_test:
-    image: life_cell
-    environment:
-      KAFKA_BROKERS: $KAFKA_BROKERS
-      GAME_SIZE: ${GAME_SIZE_X}x${GAME_SIZE_Y}
-      RUST_LOG: $RUST_LOG
-      CELLS: 0-1
-    container_name: life_cell_0
-    profiles: ["test"]
-    networks:
-      - kafka-network
-
   life_cell_0:
     image: life_cell
     environment:
